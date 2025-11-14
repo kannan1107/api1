@@ -5,7 +5,7 @@ import fs from "fs";
 import connectDB from "./src/config/db.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 import authRouter from "./src/routes/authRoutes.js";
-import userRoutes from "./src/routes/userRoutes.js";
+import userRoutes from "./src/routes/userRoutes.jsx";
 import eventRoutes from "./src/routes/eventRoutes.js";
 import bookingRoutes from "./src/routes/bookingRoutes.js";
 import cors from "cors";
