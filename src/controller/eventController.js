@@ -5,9 +5,7 @@ import Payment from "../model/Payment.js";
 // get /api/event all
 export const getAllEvents = async (req, res) => {
   try {
-    console.log("GET /api/events called");
     const events = await Event.find();
-    console.log("Found events:", events.length);
     res.status(200).json({
       status: "success",
       results: events.length,
@@ -26,39 +24,49 @@ export const getAllEvents = async (req, res) => {
 // post /api/event/ create event
 export const createEvent = async (req, res) => {
   try {
-    console.log("Request body:", req.body);
-    console.log("User (from req.user):", req.user);
-
     if (!req.user || !req.user.id) {
       return res.status(401).json({
         status: "error",
-        message:
-          "Authentication failed: User information is missing or incomplete.",
+        message: "Authentication failed: User information is missing.",
       });
     }
 
-    if (!req.body) {
-      return res.status(400).json({
-        status: "error",
-        message:
-          "Request body is missing. Please send data as JSON, not multipart/form-data",
-      });
-    }
-
+    // 1. Destructure all fields sent from Frontend
     const {
       title,
       description,
       date,
       location,
       category,
-      viptickets,
-      regulartickets,
-      totalSeats,
+      viptickets, // Price
+      regulartickets, // Price
+      totalSeats, // Total Count
+      vipSeats, // VIP Count (Added this)
+      regularSeats, // Regular Count (Added this)
       organizer,
-      image,
-      video,
     } = req.body;
 
+    console.log("Creating event:", { title, vipSeats, regularSeats });
+    console.log("Ticket prices:", {
+      viptickets,
+      regulartickets,
+      vipSeatsValue: vipSeats,
+      regularSeatsValue: regularSeats,
+    });
+
+    // 2. Handle Files (Image & Video) Safely
+    // Multer puts files in req.files when using .fields()
+    const imageFilename =
+      req.files && req.files.image && req.files.image[0]
+        ? req.files.image[0].filename
+        : null;
+
+    const videoFilename =
+      req.files && req.files.video && req.files.video[0]
+        ? req.files.video[0].filename
+        : null;
+
+    // 3. Validation
     if (
       !title ||
       !description ||
@@ -74,43 +82,36 @@ export const createEvent = async (req, res) => {
       });
     }
 
-    if (!viptickets || !regulartickets) {
+    if (!imageFilename) {
       return res.status(400).json({
         status: "error",
-        message: "VIP tickets and regular tickets prices are required",
+        message: "Event image is required",
       });
     }
 
-    console.log(req.files.image[0]);
+    // 4. Create Event
     const newEvent = await Event.create({
       title,
       description,
       date: new Date(date),
       location,
       category,
-      viptickets,
-      regulartickets,
-      totalSeats,
+      vipTicketPrice: Number(viptickets),
+      regularTicketPrice: Number(regulartickets),
+      vipSeatCapacity: Number(vipSeats),
+      regularSeatCapacity: Number(regularSeats),
+      vipSeats: Number(vipSeats),
+      regularSeats: Number(regularSeats),
       organizer,
-      image: req.files.image[0].filename,
-      video: video || null,
+      image: imageFilename,
+      video: videoFilename,
       createdBy: req.user.id,
     });
 
     console.log("Event created successfully:", newEvent._id);
 
-    // try {
-    //   console.log("Attempting to send email to:", req.user.email);
-    //   await sendEmail({
-    //     to: req.user.email,
-    //     subject: "Event Created Successfully",
-    //     text: `Hello ${req.user.name},\n\nYour event "${title}" has been created successfully.\n\nEvent Details:\nTitle: ${title}\nDescription: ${description}\nDate: ${date}\nLocation: ${location}\nCategory: ${category}\nVIP Tickets: ${viptickets}\nRegular Tickets: ${regulartickets}\nTotal Seats: ${totalSeats}\nOrganizer: ${organizer}\n\nThank you for using our Event Management System!`,
-    //   });
-    //   console.log("Email sent successfully!");
-    // } catch (emailError) {
-    //   console.error("Email sending failed:", emailError.message);
-    //   console.error("Full email error:", emailError);
-    // }
+    // Optional: Email logic (commented out as per your original code)
+    // ...
 
     res.status(201).json({
       status: "success",
@@ -141,39 +142,9 @@ export const createEvent = async (req, res) => {
 // put /api/event/:id
 export const updateEvent = async (req, res) => {
   try {
-    console.log("UPDATE EVENT - Raw body:", req.body);
-    console.log("UPDATE EVENT - Body keys:", Object.keys(req.body));
-
     const { id } = req.params;
-    const {
-      title,
-      description,
-      date,
-      location,
-      category,
-      viptickets,
-      regulartickets,
-      totalSeats,
-      organizer,
-      image,
-      video,
-    } = req.body;
-    console.log("Received image URL in createEvent:", image);
 
-    // Clean up field names and handle singular/plural forms
-    const cleanBody = {};
-    Object.keys(req.body).forEach((key) => {
-      const cleanKey = key.trim();
-      // Handle field name variations
-      if (cleanKey === "vipticket") {
-        cleanBody["viptickets"] = req.body[key];
-      } else {
-        cleanBody[cleanKey] = req.body[key];
-      }
-    });
-
-    console.log("Cleaned body:", cleanBody);
-
+    // Check if event exists
     const event = await Event.findById(id);
     if (!event) {
       return res.status(404).json({
@@ -182,6 +153,7 @@ export const updateEvent = async (req, res) => {
       });
     }
 
+    // Authorization Check
     if (
       event.createdBy.toString() !== req.user.id.toString() &&
       req.user.role !== "admin"
@@ -192,29 +164,59 @@ export const updateEvent = async (req, res) => {
       });
     }
 
-    event.title = cleanBody.title || title || event.title;
-    event.description =
-      cleanBody.description || description || event.description;
-    event.date = cleanBody.date || date || event.date;
-    event.location = cleanBody.location || location || event.location;
-    event.category = cleanBody.category || category || event.category;
-    event.viptickets = cleanBody.viptickets || viptickets || event.viptickets;
-    event.regulartickets =
-      cleanBody.regulartickets || regulartickets || event.regulartickets;
-    event.totalSeats = cleanBody.totalSeats || totalSeats || event.totalSeats;
-    event.organizer = cleanBody.organizer || organizer || event.organizer;
-    event.image = cleanBody.image || image || event.image;
-    event.video = cleanBody.video || video || event.video;
+    // Handle Files: Check if new files were uploaded, otherwise keep old ones
+    let imageFilename = event.image;
+    let videoFilename = event.video;
+
+    if (req.files && req.files.image && req.files.image[0]) {
+      imageFilename = req.files.image[0].filename;
+    }
+
+    if (req.files && req.files.video && req.files.video[0]) {
+      videoFilename = req.files.video[0].filename;
+    }
+
+    // Update fields only if they exist in req.body
+    const {
+      title,
+      description,
+      date,
+      location,
+      category,
+      viptickets,
+      regulartickets,
+      totalSeats,
+      vipSeats,
+      regularSeats,
+      organizer,
+    } = req.body;
+
+    event.title = title || event.title;
+    event.description = description || event.description;
+    event.date = date ? new Date(date) : event.date;
+    event.location = location || event.location;
+    event.category = category || event.category;
+
+    // Handle numbers specifically to avoid casting issues
+    if (viptickets) event.vipTicketPrice = Number(viptickets);
+    if (regulartickets) event.regularTicketPrice = Number(regulartickets);
+    if (totalSeats) event.totalSeats = Number(totalSeats);
+    if (vipSeats) event.vipSeatCapacity = Number(vipSeats);
+    if (regularSeats) event.regularSeatCapacity = Number(regularSeats);
+
+    event.organizer = organizer || event.organizer;
+    event.image = imageFilename;
+    event.video = videoFilename;
 
     await event.save();
 
-    // Send email after successful update
+    // Send email notification
     try {
       if (req.user.email) {
         await sendEmail({
           to: req.user.email,
           subject: "Event Updated Successfully",
-          text: `Hello ${req.user.name},\n\nYour event "${event.title}" has been updated successfully.\n\nThank you for using our Event Management System!`,
+          text: `Hello ${req.user.name},\n\nYour event "${event.title}" has been updated successfully.`,
         });
       }
     } catch (emailError) {
@@ -227,6 +229,7 @@ export const updateEvent = async (req, res) => {
       event,
     });
   } catch (error) {
+    console.error("Update event error:", error);
     res.status(500).json({
       status: "error",
       message: error.message,
@@ -237,40 +240,34 @@ export const updateEvent = async (req, res) => {
 // delete /api/event/:id
 export const deleteEvent = async (req, res) => {
   try {
-    console.log("DELETE EVENT called for ID:", req.params.id);
     const { id } = req.params;
 
     const event = await Event.findById(id);
     if (!event) {
-      console.log("Event not found:", id);
       return res.status(404).json({
         status: "error",
         message: "Event not found",
       });
     }
 
-    console.log("Event found, checking permissions");
     if (
       event.createdBy.toString() !== req.user.id.toString() &&
       req.user.role !== "admin"
     ) {
-      console.log("Permission denied for user:", req.user.id);
       return res.status(403).json({
         status: "error",
         message: "You are not authorized to delete this event",
       });
     }
 
-    console.log("Deleting event:", event.title);
     await Event.findByIdAndDelete(id);
 
-    // Send email after successful deletion
     try {
       if (req.user.email) {
         await sendEmail({
           to: req.user.email,
           subject: "Event Deleted Successfully",
-          text: `Hello ${req.user.name},\n\nYour event "${event.title}" has been deleted successfully.\n\nThank you for using our Event Management System!`,
+          text: `Hello ${req.user.name},\n\nYour event "${event.title}" has been deleted successfully.`,
         });
       }
     } catch (emailError) {
@@ -293,9 +290,6 @@ export const deleteEvent = async (req, res) => {
 // POST /api/events/:id/payment - Process event payment
 export const processEventPayment = async (req, res) => {
   try {
-    console.log("PAYMENT REQUEST for event:", req.params.id);
-    console.log("Payment data:", req.body);
-
     const { id } = req.params;
     const {
       userId,
@@ -327,19 +321,13 @@ export const processEventPayment = async (req, res) => {
       status: "completed",
     };
 
-    // Save payment to database
     const savedPayment = await Payment.create(paymentRecord);
-    console.log("Payment saved to database:", savedPayment._id);
-
-    console.log("Sending payment response:", paymentRecord);
 
     res.status(200).json({
       status: "success",
       message: "Payment processed successfully",
       payment: paymentRecord,
     });
-
-    console.log("Payment response sent successfully");
   } catch (error) {
     console.error("Payment processing error:", error);
     res.status(500).json({

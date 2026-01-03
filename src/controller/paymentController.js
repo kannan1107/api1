@@ -106,12 +106,15 @@ export const createPayment = async (req, res) => {
     console.log("Request body:", req.body);
 
     const event = await Event.findById(eventId);
+
     if (!event) {
       return res.status(404).json({
         status: "error",
         message: "Event not found",
       });
     }
+
+    console.log("Event found:", event);
 
     // resolve user info
     const resolvedUserId = req.user?.id || userId;
@@ -139,6 +142,35 @@ export const createPayment = async (req, res) => {
     };
 
     const payment = await Payment.create(paymentData);
+
+    if (event) {
+      // Update event's vipSeatCapacity or regularSeatCapacity based on ticketType
+      if (ticketType === "VIP") {
+        event.vipSeats -= Number(ticketCount);
+      } else if (ticketType === "Regular") {
+        event.regularSeats -= Number(ticketCount);
+      } else {
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid ticket type",
+        });
+      }
+      if (event.vipSeatCapacity < 0 || event.regularSeatCapacity < 0) {
+        return res.status(400).json({
+          status: "error",
+          message: "Not enough seats available",
+        });
+
+        // Save the updated event
+        await event.save();
+        return res.status(400).json({
+          status: "error",
+          message: "Not enough seats available",
+        });
+      }
+
+      await event.save();
+    }
 
     res.status(201).json({
       status: "success",
