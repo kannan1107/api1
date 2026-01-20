@@ -26,7 +26,17 @@ const eventSchema = new Schema(
       trim: true,
       default: "",
     },
+    imagePublicId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     video: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    videoPublicId: {
       type: String,
       trim: true,
       default: "",

@@ -1,6 +1,8 @@
 import sendEmail from "../utils/sendEmail.js";
 import Event from "../model/Event.js";
 import Payment from "../model/Payment.js";
+import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinaryUpload.js";
+import fs from 'fs';
 
 // get /api/event all
 export const getAllEvents = async (req, res) => {
@@ -54,17 +56,35 @@ export const createEvent = async (req, res) => {
       regularSeatsValue: regularSeats,
     });
 
-    // 2. Handle Files (Image & Video) Safely
-    // Multer puts files in req.files when using .fields()
-    const imageFilename =
-      req.files && req.files.image && req.files.image[0]
-        ? req.files.image[0].filename
-        : null;
+    // 2. Handle Files (Image & Video) with Cloudinary
+    let imageUrl = null;
+    let videoUrl = null;
+    let imagePublicId = null;
+    let videoPublicId = null;
 
-    const videoFilename =
-      req.files && req.files.video && req.files.video[0]
-        ? req.files.video[0].filename
-        : null;
+    try {
+      if (req.files && req.files.image && req.files.image[0]) {
+        const imageUpload = await uploadToCloudinary(req.files.image[0], 'events/images');
+        imageUrl = imageUpload.url;
+        imagePublicId = imageUpload.public_id;
+        // Clean up local file
+        fs.unlinkSync(req.files.image[0].path);
+      }
+
+      if (req.files && req.files.video && req.files.video[0]) {
+        const videoUpload = await uploadToCloudinary(req.files.video[0], 'events/videos');
+        videoUrl = videoUpload.url;
+        videoPublicId = videoUpload.public_id;
+        // Clean up local file
+        fs.unlinkSync(req.files.video[0].path);
+      }
+    } catch (uploadError) {
+      console.error('File upload error:', uploadError);
+      return res.status(500).json({
+        status: 'error',
+        message: 'File upload failed: ' + uploadError.message,
+      });
+    }
 
     // 3. Validation
     if (
@@ -82,7 +102,7 @@ export const createEvent = async (req, res) => {
       });
     }
 
-    if (!imageFilename) {
+    if (!imageUrl) {
       return res.status(400).json({
         status: "error",
         message: "Event image is required",
@@ -103,8 +123,10 @@ export const createEvent = async (req, res) => {
       vipSeats: Number(vipSeats),
       regularSeats: Number(regularSeats),
       organizer,
-      image: imageFilename,
-      video: videoFilename,
+      image: imageUrl,
+      video: videoUrl,
+      imagePublicId,
+      videoPublicId,
       createdBy: req.user.id,
     });
 
@@ -165,15 +187,43 @@ export const updateEvent = async (req, res) => {
     }
 
     // Handle Files: Check if new files were uploaded, otherwise keep old ones
-    let imageFilename = event.image;
-    let videoFilename = event.video;
+    let imageUrl = event.image;
+    let videoUrl = event.video;
+    let imagePublicId = event.imagePublicId;
+    let videoPublicId = event.videoPublicId;
 
-    if (req.files && req.files.image && req.files.image[0]) {
-      imageFilename = req.files.image[0].filename;
-    }
+    try {
+      if (req.files && req.files.image && req.files.image[0]) {
+        // Delete old image from Cloudinary if exists
+        if (event.imagePublicId) {
+          await deleteFromCloudinary(event.imagePublicId);
+        }
+        // Upload new image
+        const imageUpload = await uploadToCloudinary(req.files.image[0], 'events/images');
+        imageUrl = imageUpload.url;
+        imagePublicId = imageUpload.public_id;
+        // Clean up local file
+        fs.unlinkSync(req.files.image[0].path);
+      }
 
-    if (req.files && req.files.video && req.files.video[0]) {
-      videoFilename = req.files.video[0].filename;
+      if (req.files && req.files.video && req.files.video[0]) {
+        // Delete old video from Cloudinary if exists
+        if (event.videoPublicId) {
+          await deleteFromCloudinary(event.videoPublicId);
+        }
+        // Upload new video
+        const videoUpload = await uploadToCloudinary(req.files.video[0], 'events/videos');
+        videoUrl = videoUpload.url;
+        videoPublicId = videoUpload.public_id;
+        // Clean up local file
+        fs.unlinkSync(req.files.video[0].path);
+      }
+    } catch (uploadError) {
+      console.error('File upload error:', uploadError);
+      return res.status(500).json({
+        status: 'error',
+        message: 'File upload failed: ' + uploadError.message,
+      });
     }
 
     // Update fields only if they exist in req.body
@@ -205,8 +255,10 @@ export const updateEvent = async (req, res) => {
     if (regularSeats) event.regularSeatCapacity = Number(regularSeats);
 
     event.organizer = organizer || event.organizer;
-    event.image = imageFilename;
-    event.video = videoFilename;
+    event.image = imageUrl;
+    event.video = videoUrl;
+    event.imagePublicId = imagePublicId;
+    event.videoPublicId = videoPublicId;
 
     await event.save();
 
@@ -258,6 +310,14 @@ export const deleteEvent = async (req, res) => {
         status: "error",
         message: "You are not authorized to delete this event",
       });
+    }
+
+    // Delete associated files from Cloudinary
+    if (event.imagePublicId) {
+      await deleteFromCloudinary(event.imagePublicId);
+    }
+    if (event.videoPublicId) {
+      await deleteFromCloudinary(event.videoPublicId);
     }
 
     await Event.findByIdAndDelete(id);
