@@ -35,7 +35,7 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Configure multer AFTER uploads exists
+// Configure multer for temporary file handling (files will be uploaded to Cloudinary)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
