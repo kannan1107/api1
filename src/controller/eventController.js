@@ -1,8 +1,12 @@
 import sendEmail from "../utils/sendEmail.js";
 import Event from "../model/Event.js";
 import Payment from "../model/Payment.js";
-import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinaryUpload.js";
-import fs from 'fs';
+import {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+} from "../utils/cloudinaryUpload.js";
+
+import fs from "fs";
 
 // get /api/event all
 export const getAllEvents = async (req, res) => {
@@ -64,7 +68,10 @@ export const createEvent = async (req, res) => {
 
     try {
       if (req.files && req.files.image && req.files.image[0]) {
-        const imageUpload = await uploadToCloudinary(req.files.image[0], 'events/images');
+        const imageUpload = await uploadToCloudinary(
+          req.files.image[0],
+          "events/images",
+        );
         imageUrl = imageUpload.url;
         imagePublicId = imageUpload.public_id;
         // Clean up local file
@@ -72,17 +79,20 @@ export const createEvent = async (req, res) => {
       }
 
       if (req.files && req.files.video && req.files.video[0]) {
-        const videoUpload = await uploadToCloudinary(req.files.video[0], 'events/videos');
+        const videoUpload = await uploadToCloudinary(
+          req.files.video[0],
+          "events/videos",
+        );
         videoUrl = videoUpload.url;
         videoPublicId = videoUpload.public_id;
         // Clean up local file
         fs.unlinkSync(req.files.video[0].path);
       }
     } catch (uploadError) {
-      console.error('File upload error:', uploadError);
+      console.error("File upload error:", uploadError);
       return res.status(500).json({
-        status: 'error',
-        message: 'File upload failed: ' + uploadError.message,
+        status: "error",
+        message: "File upload failed: " + uploadError.message,
       });
     }
 
@@ -132,6 +142,23 @@ export const createEvent = async (req, res) => {
 
     console.log("Event created successfully:", newEvent._id);
 
+    // Send email notification
+    try {
+      console.log("Attempting to send email to:", req.user.email);
+      if (req.user.email) {
+        const emailResult = await sendEmail({
+          to: req.user.email,
+          subject: "Event Created Successfully",
+          text: `Hello ${req.user.name || "User"},\n\nYour event "${newEvent.title}" has been created successfully.`,
+        });
+        console.log("Email sent successfully:", emailResult);
+      } else {
+        console.log("No user email found");
+      }
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+    }
+
     // Optional: Email logic (commented out as per your original code)
     // ...
 
@@ -145,7 +172,7 @@ export const createEvent = async (req, res) => {
 
     if (error.name === "ValidationError") {
       const validationErrors = Object.values(error.errors).map(
-        (err) => err.message
+        (err) => err.message,
       );
       return res.status(400).json({
         status: "error",
@@ -199,7 +226,10 @@ export const updateEvent = async (req, res) => {
           await deleteFromCloudinary(event.imagePublicId);
         }
         // Upload new image
-        const imageUpload = await uploadToCloudinary(req.files.image[0], 'events/images');
+        const imageUpload = await uploadToCloudinary(
+          req.files.image[0],
+          "events/images",
+        );
         imageUrl = imageUpload.url;
         imagePublicId = imageUpload.public_id;
         // Clean up local file
@@ -212,17 +242,20 @@ export const updateEvent = async (req, res) => {
           await deleteFromCloudinary(event.videoPublicId);
         }
         // Upload new video
-        const videoUpload = await uploadToCloudinary(req.files.video[0], 'events/videos');
+        const videoUpload = await uploadToCloudinary(
+          req.files.video[0],
+          "events/videos",
+        );
         videoUrl = videoUpload.url;
         videoPublicId = videoUpload.public_id;
         // Clean up local file
         fs.unlinkSync(req.files.video[0].path);
       }
     } catch (uploadError) {
-      console.error('File upload error:', uploadError);
+      console.error("File upload error:", uploadError);
       return res.status(500).json({
-        status: 'error',
-        message: 'File upload failed: ' + uploadError.message,
+        status: "error",
+        message: "File upload failed: " + uploadError.message,
       });
     }
 
@@ -382,6 +415,20 @@ export const processEventPayment = async (req, res) => {
     };
 
     const savedPayment = await Payment.create(paymentRecord);
+
+    // Send ticket booking confirmation email
+    try {
+      if (req.user && req.user.email) {
+        await sendEmail({
+          to: req.user.email,
+          subject: "Ticket Booking Confirmation",
+          text: `Hello ${userName},\n\nYour ticket booking has been confirmed!\n\nBooking Details:\n- Event: ${event.title}\n- Ticket Type: ${ticketType}\n- Quantity: ${ticketCount}\n- Total Amount: $${totalAmount}\n- Payment ID: ${paymentRecord.paymentId}\n\nThank you for your booking!`,
+        });
+        console.log("Booking confirmation email sent");
+      }
+    } catch (emailError) {
+      console.error("Booking confirmation email failed:", emailError);
+    }
 
     res.status(200).json({
       status: "success",
