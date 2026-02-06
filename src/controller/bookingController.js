@@ -5,7 +5,42 @@ import sendEmail from "../utils/sendEmail.js";
 // POST /api/booking - Create ticket booking
 export const createBooking = async (req, res) => {
   try {
-    const { eventId, ticketType, quantity } = req.body;
+    const { eventId, ticketType, quantity, totalAmount, email } = req.body;
+
+    // Check event exists and get current capacity
+    const event = await Event.findById(eventId);
+    if (!event) {
+      return res.status(404).json({
+        status: "error",
+        message: "Event not found",
+      });
+    }
+
+    // Check seat availability - if requested > available, reject booking
+    if (ticketType === "viptickets") {
+      if (quantity > event.vipSeatCapacity) {
+        return res.status(400).json({
+          status: "error",
+          message: `Booking failed! Only ${event.vipSeatCapacity} VIP seats available, but you requested ${quantity} tickets.`,
+          availableSeats: event.vipSeatCapacity,
+          requestedSeats: quantity
+        });
+      }
+    } else if (ticketType === "regulartickets") {
+      if (quantity > event.regularSeatCapacity) {
+        return res.status(400).json({
+          status: "error",
+          message: `Booking failed! Only ${event.regularSeatCapacity} regular seats available, but you requested ${quantity} tickets.`,
+          availableSeats: event.regularSeatCapacity,
+          requestedSeats: quantity
+        });
+      }
+    } else {
+      return res.status(400).json({
+        status: "error",
+        message: "Invalid ticket type",
+      });
+    }
 
     const booking = await Booking.create({
       title: eventId,
