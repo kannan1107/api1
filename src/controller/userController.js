@@ -6,8 +6,6 @@ export const createUser = async (req, res) => {
   try {
     const { name, email, password, role, phone } = req.body;
 
-    console.log("Create user request body:", req.body);
-
     // Validate required fields
     if (!name || !email) {
       return res.status(400).json({
@@ -26,18 +24,20 @@ export const createUser = async (req, res) => {
     }
 
     const plainPassword = password || "password123";
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(plainPassword, salt);
+    // const salt = await bcrypt.genSalt(10);
+    // const hashedPassword = await bcrypt.hash(plainPassword, salt);
 
     const newUser = await User.create({
       name,
       email,
       phone,
-      password: hashedPassword,
+      password: plainPassword,
       role: role || "user",
     });
 
-    console.log("User created successfully:", newUser._id);
+    console.log("Attempting to send email to:", email);
+    console.log("EMAIL_USER:", process.env.EMAIL_USER);
+    console.log("EMAIL_PASS exists:", !!process.env.EMAIL_PASS);
 
     try {
       const emailResult = await sendEmail({
@@ -48,6 +48,7 @@ export const createUser = async (req, res) => {
       console.log("✅ Email sent successfully:", emailResult.messageId);
     } catch (emailError) {
       console.error("❌ Email failed:", emailError.message);
+      console.error("Full error:", emailError);
     }
 
     return res.status(201).json({
@@ -56,8 +57,7 @@ export const createUser = async (req, res) => {
       data: newUser,
     });
   } catch (error) {
-    console.error("Create user error:", error);
-    return res.status(400).json({
+    res.status(500).json({
       status: "error",
       message: error.message,
     });
@@ -138,15 +138,11 @@ export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, email, password, role, phone } = req.body;
-
-    const updateData = { name, email, role, phone };
-
-    if (password) {
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
-    }
-
-    const user = await User.findByIdAndUpdate(id, updateData, { new: true });
+    const user = await User.findByIdAndUpdate(
+      id,
+      { name, email, password, role, phone },
+      { new: true }
+    );
     if (!user) {
       return res.status(404).json({
         status: "error",
