@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBooking, processPayment, getUserBookings } from '../controller/bookingController.js';
+import { createBooking, processPayment, getUserBookings, cancelBooking } from '../controller/bookingController.js';
 import { protect } from '../middleware/authmiddleware.js';
 
 const router = express.Router();
@@ -58,6 +58,9 @@ router.post('/:id/payment', processPayment);
 
 // GET /api/booking - Get user bookings
 router.get('/', getUserBookings);
+
+// DELETE /api/booking/:id/cancel - Cancel booking
+router.delete('/:id/cancel', cancelBooking);
 
 console.log('Booking routes loaded successfully');
 
