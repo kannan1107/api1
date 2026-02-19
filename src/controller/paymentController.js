@@ -1,6 +1,7 @@
 import Payment from "../model/Payment.js";
 import Event from "../model/Event.js";
 import Stripe from "stripe";
+import sendEmail from "../utils/sendEmail.js";
 import Dotenv from "dotenv";
 
 Dotenv.config();
@@ -42,7 +43,7 @@ export const createStripeCheckoutSession = async (req, res) => {
     const actualUnitPrice = event.ticketPrices[ticketType]; // Assuming event has a ticketPrices object
     if (toCents(actualUnitPrice) !== toCents(unitPrice)) {
       console.warn(
-        `Frontend price mismatch for event ${eventId}, ticketType ${ticketType}. Frontend: ${unitPrice}, Backend: ${actualUnitPrice}`
+        `Frontend price mismatch for event ${eventId}, ticketType ${ticketType}. Frontend: ${unitPrice}, Backend: ${actualUnitPrice}`,
       );
     }
 
@@ -155,7 +156,7 @@ export const createPayment = async (req, res) => {
           message: "Invalid ticket type",
         });
       }
-      if (event.vipSeatCapacity < 0 || event.regularSeatCapacity < 0) {
+      if (event.vipSeats < 0 || event.regularSeats < 0) {
         return res.status(400).json({
           status: "error",
           message: "Not enough seats available",
@@ -170,6 +171,51 @@ export const createPayment = async (req, res) => {
       }
 
       await event.save();
+    }
+
+    // Send confirmation email
+    try {
+      if (paymentData.email) {
+        const textContent = `Hello ${paymentData.userName},\n\nYour ticket booking has been confirmed!\n\nBooking Details:\n- Event: ${event.title}\n- Date: ${new Date(event.date).toLocaleDateString()}\n- Location: ${event.location}\n- Ticket Type: ${paymentData.ticketType}\n- Quantity: ${paymentData.ticketCount}\n- Total Amount: $${paymentData.totalAmount.toFixed(2)}\n- Payment ID: ${paymentData.paymentId}\n\nThank you for your booking!`;
+        const htmlContent = `
+              <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+                <div style="background-color: #f4f4f4; padding: 20px; text-align: center;">
+                  <h1 style="color: #444;">Ticket Booking Confirmation</h1>
+                </div>
+                <div style="padding: 20px;">
+                  <p>Hello <strong>${paymentData.userName}</strong>,</p>
+                  <p>Your ticket booking for the event below has been confirmed. Thank you for your purchase!</p>
+                  <div style="border-top: 2px solid #eee; margin: 20px 0;"></div>
+                  <h2 style="color: #007bff;">${event.title}</h2>
+                  <p><strong>Date:</strong> ${new Date(event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+                  <p><strong>Location:</strong> ${event.location}</p>
+                  ${event.image ? `<img src="${event.image}" alt="${event.title}" style="max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 20px;">` : ""}
+                  
+                  <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 30px;">Booking Details</h3>
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Ticket Type:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${paymentData.ticketType}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Quantity:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${paymentData.ticketCount}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Total Amount:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${paymentData.totalAmount.toFixed(2)}</td></tr>
+                    <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Payment ID:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${paymentData.paymentId}</td></tr>
+                  </table>
+                  <div style="border-top: 2px solid #eee; margin: 20px 0;"></div>
+                  <p style="font-size: 0.9em; color: #777; text-align: center;">We look forward to seeing you at the event!</p>
+                </div>
+                <div style="background-color: #f4f4f4; padding: 10px; text-align: center; font-size: 0.8em; color: #777;">
+                  &copy; ${new Date().getFullYear()} Event Management. All rights reserved.
+                </div>
+              </div>
+            `;
+        await sendEmail({
+          to: paymentData.email,
+          subject: `Your Ticket for "${event.title}" is Confirmed!`,
+          text: textContent,
+          html: htmlContent,
+        });
+        console.log("Booking confirmation email sent to", paymentData.email);
+      }
+    } catch (emailError) {
+      console.error("Error sending payment confirmation email:", emailError);
     }
 
     res.status(201).json({
@@ -208,6 +254,25 @@ export const getUserPayments = async (req, res) => {
   }
 };
 
+export const getAllPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find()
+      .populate("eventId", "title date location")
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      status: "success",
+      payments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
 export const getPaymentById = async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.id)
@@ -226,6 +291,86 @@ export const getPaymentById = async (req, res) => {
       payment,
     });
   } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+export const cancelPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const payment = await Payment.findById(id).populate("eventId");
+    if (!payment) {
+      return res.status(404).json({
+        status: "error",
+        message: "Payment not found",
+      });
+    }
+
+    if (payment.userId.toString() !== req.user.id.toString()) {
+      return res.status(403).json({
+        status: "error",
+        message: "Unauthorized access",
+      });
+    }
+
+    // Restore seats to event
+    const event = payment.eventId;
+    if (event) {
+      console.log("Payment data:", {
+        ticketType: payment.ticketType,
+        vipticket: payment.vipticket,
+        regularticket: payment.regularticket,
+        ticketCount: payment.ticketCount,
+      });
+      console.log("Before cancellation:", {
+        vipSeats: event.vipSeats,
+        regularSeats: event.regularSeats,
+        vipCapacity: event.vipSeatCapacity,
+        regularCapacity: event.regularSeatCapacity,
+      });
+
+      if (payment.ticketType === "VIP" || payment.vipticket) {
+        event.vipSeats += payment.ticketCount;
+        console.log(`Adding ${payment.ticketCount} VIP seats`);
+      } else if (
+        payment.ticketType === "Regular" ||
+        payment.ticketType === "regulartickets" ||
+        payment.regularticket
+      ) {
+        event.regularSeats += payment.ticketCount;
+        console.log(`Adding ${payment.ticketCount} Regular seats`);
+      }
+
+      await event.save();
+
+      console.log("After cancellation:", {
+        vipSeats: event.vipSeats,
+        regularSeats: event.regularSeats,
+        vipCapacity: event.vipSeatCapacity,
+        regularCapacity: event.regularSeatCapacity,
+        restoredCount: payment.ticketCount,
+      });
+    }
+
+    await Payment.findByIdAndDelete(id);
+
+    res.status(200).json({
+      status: "success",
+      message: `Ticket cancelled successfully. Refund of $${payment.totalAmount} will be processed within 5-7 business days.`,
+      refundAmount: payment.totalAmount,
+      restoredSeats: payment.ticketCount,
+      availableSeats: {
+        vipSeats: event.vipSeatCapacity,
+        regularSeats: event.regularSeatCapacity,
+        totalAvailable: event.vipSeatCapacity + event.regularSeatCapacity,
+      },
+    });
+  } catch (error) {
+    console.error("Error cancelling payment:", error);
     res.status(500).json({
       status: "error",
       message: error.message,
