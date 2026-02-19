@@ -45,7 +45,7 @@ const upload = multer({ storage });
 
 // Static files and upload middleware
 app.use("/uploads", express.static("uploads"));
-app.use("/api/events", upload.fields([{ name: "image" }, { name: "video" }]));
+app.use("/api/events", upload.fields([{ name: "image" }, { name: "video" }, { name: "guestPhotos", maxCount: 10 }]));
 
 // Request logging
 app.use((req, res, next) => {
