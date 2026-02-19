@@ -26,7 +26,17 @@ const eventSchema = new Schema(
       trim: true,
       default: "",
     },
+    imagePublicId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     video: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    videoPublicId: {
       type: String,
       trim: true,
       default: "",
@@ -79,6 +89,30 @@ const eventSchema = new Schema(
       required: true,
     },
     attendees: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    guests: [
+      {
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        photo: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        photoPublicId: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        position: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+      },
+    ],
   },
   {
     timestamps: true,
