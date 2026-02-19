@@ -31,21 +31,15 @@ const userSchema = Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "user", "viewer"],
-      default: "viewer",
+      enum: ["admin", "user", "organizer"],
+      default: "user",
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
 userSchema.pre("save", async function (next) {
-  if (this.isModified("password")) {
-    // const salt = await bcrypt.genSalt(10);
-    // this.password = await bcrypt.hash(this.password, salt);
-    // const salt = await bcrypt.genSalt(10);
-    // this.password = await bcrypt.hash(this.password, salt);
-  }
   next();
 });
 
