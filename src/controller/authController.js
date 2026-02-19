@@ -36,7 +36,7 @@ export const register = async (req, res) => {
     name,
     email,
     password: hashedPassword,
-    role: role || "viewer",
+    role: role || "User",
     phone,
   });
 
