@@ -51,6 +51,46 @@ export const createBooking = async (req, res) => {
       email,
     });
 
+    // Send booking confirmation email
+    try {
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #f4f4f4; padding: 20px; text-align: center;">
+            <h1 style="color: #444;">Ticket Booking Confirmation</h1>
+          </div>
+          <div style="padding: 20px;">
+            <p>Hello <strong>${req.user.name}</strong>,</p>
+            <p>Your ticket booking has been confirmed!</p>
+            ${event.image ? `<div style="text-align:center;margin:15px 0;"><img src="${event.image}" alt="${event.title}" style="max-width:100%;border-radius:4px;"></div>` : ""}
+            <h2 style="color: #007bff;">${event.title}</h2>
+            <p><strong>Date:</strong> ${new Date(event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+            <p><strong>Location:</strong> ${event.location}</p>
+            <p><strong>Category:</strong> ${event.category}</p>
+            <p><strong>Organizer:</strong> ${event.organizer}</p>
+            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 20px;">Ticket Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Ticket Type:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${ticketType.toUpperCase()}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Quantity:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${quantity}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Total Amount:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${Number(totalAmount).toFixed(2)}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Booking ID:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${booking._id}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Status:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">Pending Payment</td></tr>
+            </table>
+            <p style="font-size: 0.9em; color: #777; text-align: center; margin-top: 20px;">We look forward to seeing you at the event!</p>
+          </div>
+          <div style="background-color: #f4f4f4; padding: 10px; text-align: center; font-size: 0.8em; color: #777;">
+            &copy; ${new Date().getFullYear()} Event Management. All rights reserved.
+          </div>
+        </div>`;
+      await sendEmail({
+        to: req.user.email,
+        subject: `Ticket Booking Confirmed for "${event.title}"`,
+        text: `Hello ${req.user.name},\n\nYour booking for "${event.title}" is confirmed.\n\nTicket Type: ${ticketType}\nQuantity: ${quantity}\nTotal: $${Number(totalAmount).toFixed(2)}\nBooking ID: ${booking._id}`,
+        html: htmlContent,
+      });
+    } catch (emailError) {
+      console.error("Booking email failed:", emailError.message);
+    }
+
     res.status(201).json({
       status: "success",
       booking,
@@ -71,8 +111,8 @@ export const processPayment = async (req, res) => {
     const { paymentMethod } = req.body; // paymentMethod might be used for actual payment gateways
 
     const booking = await Booking.findById(id)
-      .populate("event")
-      .populate("user");
+      .populate("title", null, "Event")
+      .populate("name");
     if (!booking) {
       return res.status(404).json({
         status: "error",
@@ -80,7 +120,7 @@ export const processPayment = async (req, res) => {
       });
     }
 
-    if (booking.user._id.toString() !== req.user._id.toString()) {
+    if (booking.name._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         status: "error",
         message: "Unauthorized access",
@@ -94,13 +134,10 @@ export const processPayment = async (req, res) => {
       });
     }
 
-    // Simulate payment processing
-    // In a real application, you would integrate with a payment gateway (e.g., Stripe, PayPal)
-    // and handle successful/failed payment responses.
     const paymentId = `pay_${Date.now()}`;
 
     // Deduct tickets from the event and update payment status
-    const event = booking.event;
+    const event = booking.title;
     const quantity = booking.quantity;
     const ticketType = booking.ticketType;
 
@@ -134,53 +171,44 @@ export const processPayment = async (req, res) => {
     booking.paymentId = paymentId;
     await booking.save();
 
-    // Send confirmation email
+    // Send payment confirmation email
     try {
-      const textContent = `Hello ${
-        req.user.name
-      },\n\nYour ticket booking has been confirmed!\n\nBooking Details:\nEvent: ${
-        booking.event.title
-      }\nTicket Type: ${booking.ticketType.toUpperCase()}\nQuantity: ${
-        booking.quantity
-      }\nTotal Amount: $${booking.totalAmount.toFixed(-2)}\nPayment ID: ${paymentId}\n\nThank you for your booking!`;
+      const ev = booking.title;
       const htmlContent = `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-            <div style="background-color: #f4f4f4; padding: 20px; text-align: center;">
-              <h1 style="color: #444;">Ticket Booking Confirmation</h1>
-            </div>
-            <div style="padding: 20px;">
-              <p>Hello <strong>${req.user.name}</strong>,</p>
-              <p>Your ticket booking for the event below has been confirmed. Thank you for your purchase!</p>
-              <div style="border-top: 2px solid #eee; margin: 20px 0;"></div>
-              <h2 style="color: #007bff;">${booking.event.title}</h2>
-              <p><strong>Date:</strong> ${new Date(booking.event.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
-              <p><strong>Location:</strong> ${booking.event.location}</p>
-              ${booking.event.image ? `<img src="${booking.event.image}" alt="${booking.event.title}" style="max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 20px;">` : ""}
-              
-              <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 30px;">Booking Details</h3>
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Ticket Type:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${booking.ticketType.toUpperCase()}</td></tr>
-                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Quantity:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${booking.quantity}</td></tr>
-                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Total Amount:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${booking.totalAmount.toFixed(2)}</td></tr>
-                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Payment ID:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${paymentId}</td></tr>
-              </table>
-              <div style="border-top: 2px solid #eee; margin: 20px 0;"></div>
-              <p style="font-size: 0.9em; color: #777; text-align: center;">We look forward to seeing you at the event!</p>
-            </div>
-            <div style="background-color: #f4f4f4; padding: 10px; text-align: center; font-size: 0.8em; color: #777;">
-              &copy; ${new Date().getFullYear()} Event Management. All rights reserved.
-            </div>
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #28a745; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0;">Payment Confirmed!</h1>
           </div>
-        `;
+          <div style="padding: 20px;">
+            <p>Hello <strong>${req.user.name}</strong>,</p>
+            <p>Your payment has been processed and your ticket is confirmed!</p>
+            ${ev.image ? `<div style="text-align:center;margin:15px 0;"><img src="${ev.image}" alt="${ev.title}" style="max-width:100%;border-radius:4px;"></div>` : ""}
+            <h2 style="color: #007bff;">${ev.title}</h2>
+            <p><strong>Date:</strong> ${new Date(ev.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+            <p><strong>Location:</strong> ${ev.location}</p>
+            <p><strong>Category:</strong> ${ev.category}</p>
+            <p><strong>Organizer:</strong> ${ev.organizer}</p>
+            <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 20px;">Ticket Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Ticket Type:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${booking.ticketType.toUpperCase()}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Quantity:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${booking.quantity}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Total Amount:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${booking.totalAmount.toFixed(2)}</td></tr>
+              <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Payment ID:</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">${paymentId}</td></tr>
+            </table>
+            <p style="font-size: 0.9em; color: #777; text-align: center; margin-top: 20px;">We look forward to seeing you at the event!</p>
+          </div>
+          <div style="background-color: #f4f4f4; padding: 10px; text-align: center; font-size: 0.8em; color: #777;">
+            &copy; ${new Date().getFullYear()} Event Management. All rights reserved.
+          </div>
+        </div>`;
       await sendEmail({
         to: req.user.email,
-        subject: `Your Ticket for "${booking.event.title}" is Confirmed!`,
-        text: textContent,
+        subject: `Your Ticket for "${ev.title}" is Confirmed!`,
+        text: `Hello ${req.user.name},\n\nPayment confirmed!\n\nEvent: ${ev.title}\nDate: ${new Date(ev.date).toLocaleDateString()}\nLocation: ${ev.location}\nTicket Type: ${booking.ticketType}\nQuantity: ${booking.quantity}\nTotal: $${booking.totalAmount.toFixed(2)}\nPayment ID: ${paymentId}`,
         html: htmlContent,
       });
     } catch (emailError) {
       console.error("Email sending failed:", emailError.message);
-      // Optionally, log the full error stack in development
     }
 
     res.status(200).json({
@@ -201,11 +229,8 @@ export const processPayment = async (req, res) => {
 // GET /api/booking - Get user bookings
 export const getUserBookings = async (req, res) => {
   try {
-    const bookings = await Booking.find({ user: req.user._id })
-      .populate(
-        "event",
-        "title date location vipTicketPrice regularTicketPrice vipSeatCapacity regularSeatCapacity vipSeats regularSeats",
-      )
+    const bookings = await Booking.find({ name: req.user._id })
+      .populate("title", "title date location vipTicketPrice regularTicketPrice vipSeatCapacity regularSeatCapacity", "Event")
       .sort({ bookingDate: -1 });
 
     res.status(200).json({
@@ -263,7 +288,7 @@ export const cancelBooking = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const booking = await Booking.findById(id).populate("event");
+    const booking = await Booking.findById(id).populate("title", null, "Event");
     if (!booking) {
       return res.status(404).json({
         status: "error",
@@ -271,7 +296,7 @@ export const cancelBooking = async (req, res) => {
       });
     }
 
-    if (booking.user.toString() !== req.user._id.toString()) {
+    if (booking.name.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         status: "error",
         message: "Unauthorized access",
@@ -279,8 +304,7 @@ export const cancelBooking = async (req, res) => {
     }
 
     if (booking.paymentStatus === "completed") {
-      // Restore seats to event
-      const event = booking.event;
+      const event = booking.title;
       if (booking.ticketType === "viptickets") {
         event.vipSeatCapacity += booking.quantity;
       } else if (booking.ticketType === "regulartickets") {
@@ -293,10 +317,11 @@ export const cancelBooking = async (req, res) => {
 
     // Send cancellation email
     try {
+      const ev = booking.title;
       await sendEmail({
         to: req.user.email,
         subject: "Booking Cancelled",
-        text: `Hello ${req.user.name},\n\nYour booking for "${booking.event.title}" has been cancelled successfully.\n\nCancelled Booking Details:\n- Ticket Type: ${booking.ticketType}\n- Quantity: ${booking.quantity}\n- Amount: $${booking.totalAmount}\n\nThank you!`,
+        text: `Hello ${req.user.name},\n\nYour booking for "${ev?.title || "the event"}" has been cancelled.\n\nCancelled Details:\n- Ticket Type: ${booking.ticketType}\n- Quantity: ${booking.quantity}\n- Amount: $${booking.totalAmount}\n\nThank you!`,
       });
     } catch (emailError) {
       console.error("Email sending failed:", emailError.message);

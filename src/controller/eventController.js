@@ -212,7 +212,7 @@ export const createEvent = async (req, res) => {
 
       console.log("Attempting to send email to:", eventCreator?.email);
       if (eventCreator && eventCreator.email) {
-        const textContent = `Hello ${eventCreator.name || "User"},\n\nYour event "${newEvent.title}" has been created successfully.\n\nEvent Details:\n- Title: ${newEvent.title}\n- Date: ${new Date(newEvent.date).toLocaleDateString()}\n- Location: ${newEvent.location}\n\nThank you for using our platform!`;
+        const textContent = `Hello ${eventCreator.name || "User"},\n\nYour event "${newEvent.title}" has been created successfully.\n\nEvent Details:\n- Title: ${newEvent.title}\n- Date: ${new Date(newEvent.date).toLocaleDateString()}\n- Location: ${newEvent.location}\n- Category: ${newEvent.category}\n- Organizer: ${newEvent.organizer}\n- VIP Ticket Price: $${newEvent.vipTicketPrice}\n- Regular Ticket Price: $${newEvent.regularTicketPrice}\n- VIP Seats: ${newEvent.vipSeatCapacity}\n- Regular Seats: ${newEvent.regularSeatCapacity}\n\nThank you for using our platform!`;
         const htmlContent = `
           <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 20px auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
             <div style="background-color: #007bff; color: white; padding: 20px; text-align: center;">
@@ -220,13 +220,19 @@ export const createEvent = async (req, res) => {
             </div>
             <div style="padding: 20px;">
               <p>Hello <strong>${eventCreator.name || "User"}</strong>,</p>
-              <p>Congratulations! Your event, <strong>"${newEvent.title}"</strong>, has been successfully created and is now listed on our platform.</p>
+              <p>Congratulations! Your event <strong>"${newEvent.title}"</strong> is now live on our platform.</p>
               ${newEvent.image ? `<div style="text-align: center; margin: 20px 0;"><img src="${newEvent.image}" alt="${newEvent.title}" style="max-width: 100%; height: auto; border-radius: 4px;"></div>` : ""}
               <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 20px;">Event Details</h3>
               <table style="width: 100%; border-collapse: collapse;">
                 <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Title:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.title}</td></tr>
                 <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Date:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${new Date(newEvent.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</td></tr>
                 <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Location:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.location}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Category:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.category}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Organizer:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.organizer}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">VIP Ticket Price:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">$${newEvent.vipTicketPrice}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Regular Ticket Price:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">$${newEvent.regularTicketPrice}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">VIP Seats:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.vipSeatCapacity}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Regular Seats:</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${newEvent.regularSeatCapacity}</td></tr>
               </table>
               <div style="text-align: center; margin-top: 30px;">
                 <a href="${process.env.CLIENT_URL}/events" style="background-color: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">View Your Events</a>

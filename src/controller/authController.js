@@ -28,16 +28,21 @@ export const register = async (req, res) => {
     });
   }
 
+  // password hashing
   const plainPassword = password || "password123";
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(plainPassword, salt);
 
   const newUser = await User.create({
     name,
     email,
-    password: hashedPassword,
-    role: role || "User",
+    password: plainPassword, // will be hashed by the pre-save hook
+    role: role || "viewer",
     phone,
+  });
+
+  await sendEmail({
+    to: email,
+    subject: "Welcome to Event Management System",
+    text: `Hello ${name},\n\nYour account has been created successfully.\n\nYour login credentials are:\nEmail: ${email}\nphone: ${phone}\nPassword: ${plainPassword}\n\nPlease change your password after logging in for the first time.\n\nThank you!`,
   });
 
   const token = generateToken({ id: newUser._id, role: newUser.role });
@@ -46,22 +51,40 @@ export const register = async (req, res) => {
     name: newUser.name,
     email: newUser.email,
     phone: newUser.phone,
+    password: newUser.password,
     role: newUser.role,
     status: "success",
     message: "User created successfully",
     token,
   });
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(plainPassword, salt);
+  console.log(hashedPassword);
 };
 
 export const login = async (req, res) => {
   const { email, password } = req.body;
-  const user = await User.findOne({ email });
 
-  if (!user || !(await user.comparePassword(password))) {
-    return res.status(400).json({
-      status: "error",
-      message: "Invalid credentials",
-    });
+  if (!email || !password) {
+    return res.status(400).json({ status: "error", message: "Email and password are required" });
+  }
+
+  const user = await User.findOne({ email }).select("+password");
+
+  if (!user) {
+    return res.status(400).json({ status: "error", message: "Invalid email or password" });
+  }
+
+  // Support both bcrypt hashed and plain text passwords
+  let isMatch = false;
+  if (user.password.startsWith('$2')) {
+    isMatch = await bcrypt.compare(password, user.password);
+  } else {
+    isMatch = user.password === password;
+  }
+
+  if (!isMatch) {
+    return res.status(400).json({ status: "error", message: "Invalid email or password" });
   }
 
   const token = generateToken({ id: user._id, role: user.role });
@@ -95,17 +118,11 @@ export const logout = (req, res) => {
 
 export const update = async (req, res) => {
   const { name, email, password, role, phone } = req.body;
-
-  const updateData = { name, email, role, phone };
-
-  if (password) {
-    const salt = await bcrypt.genSalt(10);
-    updateData.password = await bcrypt.hash(password, salt);
-  }
-
-  const user = await User.findByIdAndUpdate(req.user.id, updateData, {
-    new: true,
-  });
+  const user = await User.findByIdAndUpdate(
+    req.user.id,
+    { name, email, password, role, phone },
+    { new: true }
+  );
   res.status(200).json({
     status: "success",
     message: "User updated successfully",

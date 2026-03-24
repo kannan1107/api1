@@ -20,12 +20,12 @@ eventRoutes.get("/", getAllEvents);
 eventRoutes.post(
   "/",
   protect,
-  authorizeRole("admin", "user", "viewer"),
+  authorizeRole("admin", "user", "organizer"),
   createEvent,
 );
 
 // put /api/event/:id
-eventRoutes.put("/:id", protect, authorizeRole("admin", "user"), updateEvent);
+eventRoutes.put("/:id", protect, authorizeRole("admin", "user", "organizer"), updateEvent);
 
 // delete /api/event/:id
 eventRoutes.delete("/:id", protect, authorizeRole("admin"), deleteEvent);
