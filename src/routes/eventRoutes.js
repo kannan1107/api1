@@ -7,6 +7,7 @@ import {
   deleteEvent,
   processEventPayment,
   cancelTicket,
+  rateEvent,
 } from "../controller/eventController.js";
 import authorizeRole from "../middleware/roleMiddleware.js";
 
@@ -25,7 +26,7 @@ eventRoutes.post(
 );
 
 // put /api/event/:id
-eventRoutes.put("/:id", protect, authorizeRole("admin", "user", "organizer"), updateEvent);
+eventRoutes.put("/:id", protect, authorizeRole("admin", "user"), updateEvent);
 
 // delete /api/event/:id
 eventRoutes.delete("/:id", protect, authorizeRole("admin"), deleteEvent);
@@ -33,5 +34,6 @@ eventRoutes.delete("/:id", protect, authorizeRole("admin"), deleteEvent);
 // POST /api/events/:id/payment - Process payment
 eventRoutes.post("/:id/payment", protect, processEventPayment);
 eventRoutes.delete("/cancel-ticket/:id", protect, cancelTicket);
+eventRoutes.post("/:id/rating", protect, rateEvent);
 
 export default eventRoutes;
