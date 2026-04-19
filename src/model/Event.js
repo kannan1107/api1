@@ -89,6 +89,13 @@ const eventSchema = new Schema(
       required: true,
     },
     attendees: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    ratings: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        rating: { type: Number, min: 1, max: 5, required: true },
+        review: { type: String, trim: true, default: "" },
+      },
+    ],
     guests: [
       {
         name: {
@@ -131,6 +138,12 @@ eventSchema.virtual("availableRegularSeats").get(function () {
 
 eventSchema.virtual("availableTickets").get(function () {
   return this.vipSeats + this.regularSeats;
+});
+
+eventSchema.virtual("avgRating").get(function () {
+  if (!this.ratings || this.ratings.length === 0) return 0;
+  const sum = this.ratings.reduce((acc, r) => acc + r.rating, 0);
+  return (sum / this.ratings.length).toFixed(1);
 });
 
 eventSchema.pre("save", function (next) {
