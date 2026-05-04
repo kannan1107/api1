@@ -2,27 +2,30 @@ import Payment from "../model/Payment.js";
 import Event from "../model/Event.js";
 import Stripe from "stripe";
 import sendEmail from "../utils/sendEmail.js";
-import Dotenv from "dotenv";
 
-Dotenv.config();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+} else {
+  console.warn("⚠️ Warning: STRIPE_SECRET_KEY is missing from .env");
+  stripe = null;
+}
+
 const toCents = (amount) => Math.round(parseFloat(amount) * 100);
 
 export const createPaymentIntent = async (req, res) => {
   try {
     const { totalAmount } = req.body;
     if (!totalAmount || totalAmount <= 0)
-      return res.status(400).json({ message: "Invalid amount" });
+      return res.status(400).json({ message: 'Invalid amount' });
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(totalAmount), // already in cents
-      currency: "usd",
-      payment_method_types: ["card"],
+      amount: Math.round(totalAmount),
+      currency: 'usd',
     });
 
     res.status(200).json({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
-    console.error("PaymentIntent error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -59,7 +62,7 @@ export const createStripeCheckoutSession = async (req, res) => {
       return res.status(404).json({ message: "Event not found." });
     }
 
-    const actualUnitPrice = event.ticketPrices[ticketType]; // Assuming event has a ticketPrices object
+    const actualUnitPrice = ticketType === "VIP" ? event.vipTicketPrice : event.regularTicketPrice;
     if (toCents(actualUnitPrice) !== toCents(unitPrice)) {
       console.warn(
         `Frontend price mismatch for event ${eventId}, ticketType ${ticketType}. Frontend: ${unitPrice}, Backend: ${actualUnitPrice}`,
@@ -176,13 +179,6 @@ export const createPayment = async (req, res) => {
         });
       }
       if (event.vipSeats < 0 || event.regularSeats < 0) {
-        return res.status(400).json({
-          status: "error",
-          message: "Not enough seats available",
-        });
-
-        // Save the updated event
-        await event.save();
         return res.status(400).json({
           status: "error",
           message: "Not enough seats available",
@@ -327,44 +323,42 @@ export const cancelPayment = async (req, res) => {
       return res.status(404).json({ status: "error", message: "Payment not found" });
     }
 
-    if (payment.userId.toString() !== req.user.id.toString()) {
+    if (req.user.role !== 'admin' && payment.userId.toString() !== req.user.id.toString()) {
       return res.status(403).json({ status: "error", message: "Unauthorized access" });
     }
 
-    const countToCancel = cancelCount && cancelCount > 0 && cancelCount <= payment.ticketCount
+    const countToCancel = (cancelCount && cancelCount > 0 && cancelCount <= payment.ticketCount)
       ? cancelCount
       : payment.ticketCount;
 
+    const remaining = payment.ticketCount - countToCancel;
+    const refundAmount = (payment.totalAmount / payment.ticketCount) * countToCancel;
+
+    // Restore seats to event
     const event = payment.eventId;
     if (event) {
       if (payment.ticketType === "VIP" || payment.vipticket) {
         event.vipSeats += countToCancel;
-      } else if (
-        payment.ticketType === "Regular" ||
-        payment.ticketType === "regulartickets" ||
-        payment.regularticket
-      ) {
+      } else if (payment.ticketType === "Regular" || payment.ticketType === "regulartickets" || payment.regularticket) {
         event.regularSeats += countToCancel;
       }
       await event.save();
     }
 
-    const remainingCount = payment.ticketCount - countToCancel;
-
-    if (remainingCount <= 0) {
+    if (remaining <= 0) {
       await Payment.findByIdAndDelete(id);
     } else {
-      const refundPerTicket = payment.totalAmount / payment.ticketCount;
-      payment.ticketCount = remainingCount;
-      payment.totalAmount = Math.round(refundPerTicket * remainingCount);
+      payment.ticketCount = remaining;
+      payment.totalAmount = payment.totalAmount - refundAmount;
       await payment.save();
     }
 
     res.status(200).json({
       status: "success",
-      message: `${countToCancel} ticket(s) cancelled. ${remainingCount} ticket(s) remaining.`,
+      message: `${countToCancel} ticket(s) cancelled. ${remaining > 0 ? `${remaining} ticket(s) remaining.` : ''} Refund of $${(refundAmount / 100).toFixed(2)} will be processed within 5-7 business days.`,
       cancelledCount: countToCancel,
-      remainingCount,
+      remainingCount: remaining,
+      refundAmount,
     });
   } catch (error) {
     console.error("Error cancelling payment:", error);
