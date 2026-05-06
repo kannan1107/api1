@@ -38,6 +38,20 @@ paymentRouters.get("/tickets", getUserPayments);
 // GET /api/payment/all-tickets - Get all payments (Admin only)
 paymentRouters.get("/all-tickets", admin, getAllPayments);
 
+// GET /api/payments/check-booking/:eventId - Check if user booked this event
+paymentRouters.get("/check-booking/:eventId", async (req, res) => {
+  try {
+    const booking = await (await import("../model/Payment.js")).default.findOne({
+      eventId: req.params.eventId,
+      userId: req.user.id,
+      status: 'completed',
+    });
+    res.json({ hasBooked: !!booking });
+  } catch (e) {
+    res.status(500).json({ hasBooked: false });
+  }
+});
+
 // GET /api/payment/:id - Get payment by ID
 paymentRouters.get("/:id", getPaymentById);
 
