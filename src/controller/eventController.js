@@ -449,6 +449,9 @@ export const deleteEvent = async (req, res) => {
 
     await Event.findByIdAndDelete(id);
 
+    // Mark all related tickets as cancelled
+    await Payment.updateMany({ eventId: id }, { status: "cancelled" });
+
     try {
       // Fetch the full user object to ensure we have the email and name
       const eventCreator = await User.findById(req.user.id);
