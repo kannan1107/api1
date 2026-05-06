@@ -346,16 +346,37 @@ export const cancelPayment = async (req, res) => {
     }
 
     if (remaining <= 0) {
-      await Payment.findByIdAndDelete(id);
+      payment.ticketCount = 0;
+      payment.totalAmount = 0;
+      payment.status = 'cancelled';
+      payment.cancelledBy = req.user.role === 'admin' ? 'admin' : 'user';
+      await payment.save();
     } else {
+      // Split into two records: one active (remaining), one cancelled (countToCancel)
       payment.ticketCount = remaining;
       payment.totalAmount = payment.totalAmount - refundAmount;
       await payment.save();
+
+      await Payment.create({
+        eventId: payment.eventId,
+        userId: payment.userId,
+        name: payment.name,
+        Title: payment.Title,
+        email: payment.email,
+        ticketType: payment.ticketType,
+        ticketCount: countToCancel,
+        unitPrice: payment.unitPrice,
+        totalAmount: refundAmount,
+        paymentMethod: payment.paymentMethod,
+        paymentId: `${payment.paymentId}_cancelled_${Date.now()}`,
+        status: 'cancelled',
+        cancelledBy: req.user.role === 'admin' ? 'admin' : 'user',
+      });
     }
 
     res.status(200).json({
       status: "success",
-      message: `${countToCancel} ticket(s) cancelled. ${remaining > 0 ? `${remaining} ticket(s) remaining.` : ''} Refund of $${(refundAmount / 100).toFixed(2)} will be processed within 5-7 business days.`,
+      message: `${countToCancel} ticket(s) cancelled. ${remaining > 0 ? `${remaining} ticket(s) remaining.` : ''} Refund of $${refundAmount.toFixed(2)} will be processed within 5-7 business days.`,
       cancelledCount: countToCancel,
       remainingCount: remaining,
       refundAmount,
