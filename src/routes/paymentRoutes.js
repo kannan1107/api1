@@ -5,6 +5,7 @@ import {
   getAllPayments,
   getPaymentById,
   cancelPayment,
+  createStripeCheckoutSession,
   createPaymentIntent,
 } from "../controller/paymentController.js";
 import { protect, admin } from "../middleware/authmiddleware.js";
@@ -22,8 +23,11 @@ paymentRouters.post("/payments", (req, res) => {
 // All routes require authentication
 paymentRouters.use(protect);
 
-// POST /api/payments/create-intent - Create Stripe PaymentIntent
+// POST /api/payment/create-intent - Stripe Payment Intent (inline card form)
 paymentRouters.post("/create-intent", createPaymentIntent);
+
+// POST /api/payment/create-checkout-session - Stripe hosted checkout
+paymentRouters.post("/create-checkout-session", createStripeCheckoutSession);
 
 // POST /api/payment - Create payment
 paymentRouters.post("/", createPayment);
