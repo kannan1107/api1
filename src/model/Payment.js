@@ -32,7 +32,7 @@ const paymentSchema = Schema({
   ticketCount: {
     type: Number,
     required: true,
-    min: 1,
+    min: 0,
   },
   totalAmount: {
     type: Number,
@@ -52,6 +52,14 @@ const paymentSchema = Schema({
     type: String,
     enum: ["pending", "completed", "failed", "refunded", "cancelled"],
     default: "completed",
+  },
+  email: {
+    type: String,
+  },
+  cancelledBy: {
+    type: String,
+    enum: ['user', 'admin', null],
+    default: null,
   },
   paymentDate: {
     type: Date,
