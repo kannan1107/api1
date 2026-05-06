@@ -26,7 +26,7 @@ eventRoutes.post(
 );
 
 // put /api/event/:id
-eventRoutes.put("/:id", protect, authorizeRole("admin", "user"), updateEvent);
+eventRoutes.put("/:id", protect, authorizeRole("admin"), updateEvent);
 
 // delete /api/event/:id
 eventRoutes.delete("/:id", protect, authorizeRole("admin"), deleteEvent);
