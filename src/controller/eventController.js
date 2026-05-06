@@ -503,8 +503,8 @@ export const processEventPayment = async (req, res) => {
     const paymentRecord = {
       eventId: id,
       userId,
-      userName,
-      eventTitle: event.title,
+      name: userName,
+      Title: event.title,
       ticketType,
       ticketCount: Number(ticketCount),
       totalAmount: Number(totalAmount),
@@ -591,6 +591,16 @@ export const rateEvent = async (req, res) => {
     const event = await Event.findById(id);
     if (!event) return res.status(404).json({ message: "Event not found" });
 
+    // Only allow users who have a completed booking for this event
+    const hasBooking = await Payment.findOne({
+      eventId: id,
+      userId: req.user.id,
+      status: 'completed',
+    });
+
+    if (!hasBooking)
+      return res.status(403).json({ message: "Only users who booked this event can rate it" });
+
     const existing = event.ratings.find(
       (r) => r.userId.toString() === req.user.id.toString()
     );
@@ -599,7 +609,7 @@ export const rateEvent = async (req, res) => {
       existing.rating = rating;
       existing.review = review || "";
     } else {
-      event.ratings.push({ userId: req.user.id, rating, review: review || "" });
+      event.ratings.push({ userId: req.user.id, rating, review: review || "", userName: req.user.name || "" });
     }
 
     await event.save();
