@@ -1,5 +1,6 @@
-import express from "express";
 import dotenv from "dotenv";
+dotenv.config({ quiet: true });
+import express from "express";
 import multer from "multer";
 import fs from "fs";
 import connectDB from "./src/config/db.js";
@@ -12,7 +13,6 @@ import cors from "cors";
 import paymentRouters from "./src/routes/paymentRoutes.js";
 import Payment from "./src/model/Payment.js"; // Add Payment model import
 
-dotenv.config();
 const app = express();
 app.use(cors());
 
